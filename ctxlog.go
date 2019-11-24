@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"unsafe"
 )
 
 type ctxKey struct{}
@@ -13,7 +12,7 @@ var ckey interface{} = ctxKey{}
 
 type logCtx struct {
 	context.Context
-	val []byte // NOTE: val is not interface{}, saves 1 alloc from context.WithValue()
+	val string // NOTE: val is not interface{}, saves 1 alloc from context.WithValue()
 }
 
 func (lc *logCtx) Value(key interface{}) interface{} {
@@ -24,33 +23,20 @@ func (lc *logCtx) Value(key interface{}) interface{} {
 	}
 }
 
-func bctx(ctx context.Context) []byte {
+// get logging context
+func Ctx(ctx context.Context) string {
 	if vctx, ok := ctx.(*logCtx); ok {
 		return vctx.val
 	}
 	if pval := ctx.Value(ckey); pval != nil {
-		return pval.([]byte)
+		return pval.(string)
 	}
-	return nil // NOTE: allocate buffer lazily for better performance
-}
-
-func b2s(b []byte) string {
-	return *((*string)(unsafe.Pointer(&b)))
-}
-
-// get logging context
-func Ctx(ctx context.Context) string {
-	return b2s(bctx(ctx))
+	return ""
 }
 
 // set logging context
 func Push(ctx context.Context, s string) context.Context {
-	b := bctx(ctx)
-	if b == nil {
-		b = make([]byte, 0, 256)
-	}
-	b = append(b, ([]byte)(s)...)
-	return &logCtx{ctx, b}
+	return &logCtx{ctx, Ctx(ctx) + s}
 }
 
 func Pushf(ctx context.Context, format string, args ...interface{}) context.Context {
